@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from flask import Flask, jsonify, request
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///nekoGame.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///nekoGame.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 CORS(app)
@@ -18,7 +18,7 @@ class User(db.Model):
     username: str
     password: str
 
-    idUser = db.Column(db.Integer, primary_key=True)
+    idUser = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(30), nullable=False)
     password = db.Column(db.String(50), nullable=False)
 
@@ -32,12 +32,12 @@ class User(db.Model):
 class Game(db.Model):
     __tablename__ = 'GAMES'
     idGame = int
-    idUser_1: int
-    idUser_2: int
+    username_1: str
+    username_2: str
 
-    idGame = db.Column(db.Integer, primary_key=True)
-    idUser_1 = db.Column(db.Integer, db.ForeignKey('USERS.idUser'),primary_key=True)
-    idUser_2 = db.Column(db.Integer, db.ForeignKey('USERS.idUser'),primary_key=True)
+    idGame = db.Column(db.Integer, primary_key=True, autoincrement=False)
+    username_1 = db.Column(db.String(30), db.ForeignKey('USERS.username'))
+    username_2 = db.Column(db.String(30), db.ForeignKey('USERS.username'))
 
     def __repr__(self):
         return f'<Game{self.idGame}>'
@@ -46,14 +46,14 @@ class Game(db.Model):
 class Set(db.Model):
     __tablename__ = 'SETS'
     idGame = int
-    idSet = int
+    set_number = int
     user_status_1 = str 
     user_status_2 = str
 
     idGame = db.Column(db.Integer, db.ForeignKey('GAMES.idGame'),primary_key=True)
-    idSet = db.Column(db.Integer, primary_key=True)
-    user_status_1 = db.Column(db.String(1), nullable=False)
-    user_status_2 = db.Column(db.String(1), nullable=False)
+    set_number = db.Column(db.Integer)
+    user_status_1 = db.Column(db.String(1), nullable=False) ## W=Win, L=Lose, D=draw
+    user_status_2 = db.Column(db.String(1), nullable=False) ## W=Win, L=Lose, D=draw
 
     def __repr__(self):
         return f'<Set{self.idSet}>'
@@ -72,10 +72,13 @@ def signup():
  
         if user_exists:
             return jsonify({"error": "User already exists"}), 409
-        new_user = User(username=username, password=password)
-        db.session.add(new_user)
-        db.session.commit()
-        return jsonify({"sucess":"user created"})
+        elif username == "" or password == "":
+            return jsonify({"error":"no user or password added"})
+        else:
+            new_user = User(username=username, password=password)
+            db.session.add(new_user)
+            db.session.commit()
+            return jsonify({"sucess":"user created"})
     elif request.method == 'GET':
         users = User.query.all()
         return jsonify(users)
@@ -94,6 +97,38 @@ def login_user():
     if password is None:
         return jsonify({"error": "Unauthorized"}), 401
     return jsonify({'username':username, 'password':password})
+
+@app.route("/CreateJoinGame/<username>", methods=["GET","POST","PUT"])
+def create_join_game(username):
+    if request.method == 'POST':
+        idGame = request.json["idGame"]
+        username_1 = request.json["username_1"]
+        username_2 = request.json["username_2"]
+
+        idGame_exists = Game.query.filter_by(idGame=idGame).first()
+        if idGame_exists:
+            return jsonify({"error": "Game id already exists"}), 401
+        else: 
+            new_game = Game(idGame=idGame, username_1=username_1, username_2=username_2)
+            new_set = Set(idGame=idGame, set_number=1, user_status_1="",user_status_2="")
+            db.session.add(new_set)
+            db.session.add(new_game)
+            db.session.commit()
+            return jsonify({"sucess":"game and set created"})
+    elif request.method == "PUT":
+        data = request.get_json()
+        idGame = data["idGame"]
+        username_2 = data["username_2"]
+        print(username_2)
+        game = Game.query.get(idGame)
+        if game:
+            game.username_2 = username_2
+            db.session.commit()
+            return jsonify({"sucess":"game updated"})
+        
+@app.route("/Game/<username>/<randomId>/<set_number>", methods=["GET","POST","PUT"])
+def set_game_status(username,randomId, set_number):
+    return jsonify({"To do"})
 
 if __name__ == '__main__':
     app.run(debug=True)
